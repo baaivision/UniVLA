@@ -294,6 +294,8 @@ def parser_args():
         ],
         help="select evaluate LIBREO TASK SUITE",
     )
+    parser.add_argument("--norm_stats_path", type=str, default=None,
+                        help="Path to the normalization statistics JSON file. If not provided, will use default path relative to project root.")
     parser.add_argument("--device_id", default=0, type=int, help="CUDA device")
     parser.add_argument("--no_cache", action="store_true")
     parser.add_argument("--debug_model", action="store_true")
@@ -324,6 +326,7 @@ def main():
             vq_hub=args.vq_hub,
             vision_hub=args.vision_hub,
             device=torch.device("cuda"),
+            norm_stats_path=args.norm_stats_path,
         )
 
     sr_path = os.path.join(eval_log_dir, f"success_rate_calvin.txt")
