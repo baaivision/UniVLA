@@ -39,7 +39,8 @@ class EmuVLAModel:
         emu_hub,
         vq_hub,
         vision_hub,
-        device
+        device,
+        norm_stats_path=None
     ):
 
         self.emu_hub = emu_hub
@@ -60,6 +61,10 @@ class EmuVLAModel:
         self.use_cot = False  # always disable CoT
 
         self.video_mode = False
+
+        # Load normalization statistics from config file
+        self.norm_stats_path = norm_stats_path
+        self.load_norm_stats()
     
         # load model and tokenizer
         self.init_config(device=device)
@@ -86,6 +91,28 @@ class EmuVLAModel:
                 top_k=2048,
                 temperature=0.8,
             )
+
+    def load_norm_stats(self):
+        """Load normalization statistics from config file"""
+        # Use relative path if no path is provided
+        if self.norm_stats_path is None:
+            # Assume the script is in reference/RoboVLMs/eval/libero/
+            # The norm_stats.json is in configs/normalizer_libero/ relative to project root
+            import os
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            self.norm_stats_path = os.path.join(
+                project_root,
+                "configs",
+                "normalizer_libero",
+                "norm_stats.json"
+            )
+
+        with open(self.norm_stats_path, 'r') as f:
+            norm_stats = json.load(f)
+
+        # Extract q01 (lower bound) and q99 (upper bound) for libero
+        self.action_low = np.array(norm_stats['norm_stats']['libero']['q01'])
+        self.action_high = np.array(norm_stats['norm_stats']['libero']['q99'])
 
     def init_config(self, device):
         
@@ -299,23 +326,6 @@ class EmuVLAModel:
             return action_pred
     
     def unormalize_action(self, action):
-        action_high = np.array([
-            0.93712500009996,
-            0.86775000009256,
-            0.93712500009996,
-            0.13175314309916836,
-            0.19275000005139997,
-            0.3353504997073735,
-            0.9996000000999599
-        ])
-        action_low = np.array([
-            -0.7046250000751599,
-            -0.80100000008544,
-            -0.9375000001,
-            -0.11467779149968735,
-            -0.16395000004372,
-            -0.2240490058320433,
-            -1.0000000001
-        ])
-        action = 0.5 * (action + 1) * (action_high - action_low) + action_low
+        """Unnormalize actions using the loaded normalization statistics"""
+        action = 0.5 * (action + 1) * (self.action_high - self.action_low) + self.action_low
         return action
